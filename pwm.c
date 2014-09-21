@@ -74,7 +74,6 @@ enum hrtimer_restart cb1(struct hrtimer *t) {
 		gpio_set_value(ch->gpio, 0);
 	}
 
-
 	return HRTIMER_RESTART;
 }
 
@@ -361,9 +360,29 @@ static int __init pwm_init(void) {
 
 
 static void __exit pwm_exit(void) {
+	struct list_head *p = NULL;
+	struct list_head *q = NULL;
+	struct pwm_channel *ch = NULL;
+	struct device *d = NULL;
+
 #if DEBUG == 1
 	printk(KERN_INFO "deinstalling soft pwm module\n");
 #endif
+
+	list_for_each_safe(p, q, &_channels) {
+		ch = list_entry(p, struct pwm_channel, chan_list);
+
+		if ((d = class_find_device(&soft_pwm_class, 
+						NULL, 
+						ch, 
+						_match_channel))) {
+			put_device(d);
+			device_unregister(d);
+		}
+		deinit_channel(ch);
+		list_del(p);
+		kfree(ch);
+	}
 
 	class_unregister(&soft_pwm_class);
 }
