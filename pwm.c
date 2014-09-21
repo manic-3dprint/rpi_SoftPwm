@@ -62,13 +62,18 @@ enum hrtimer_restart cb1(struct hrtimer *t) {
 	printk(KERN_EMERG "up [%d]\n", ovr);
 #endif
 
-	gpio_set_value(ch->gpio, 1);
-
-	if (ch->dc < 100) {
-		unsigned long t_ns = ((MICRO_SEC * 10 * ch->dc) / (ch->freq));
-		ktime_t t2 = ktime_set( 0, t_ns );
-		hrtimer_start(&ch->tm2, t2, HRTIMER_MODE_REL);
+	if (ch->dc) {
+		gpio_set_value(ch->gpio, 1);
+		if (ch->dc < 100) {
+			unsigned long t_ns = ((MICRO_SEC * 10 * ch->dc) / (ch->freq));
+			ktime_t t2 = ktime_set( 0, t_ns );
+			hrtimer_start(&ch->tm2, t2, HRTIMER_MODE_REL);
+		}
 	}
+	else {
+		gpio_set_value(ch->gpio, 0);
+	}
+
 
 	return HRTIMER_RESTART;
 }
@@ -168,34 +173,50 @@ static struct attribute_group soft_pwm_dev_attr_group = {
 static ssize_t duty_cycle_store(struct device *dev,
 				  struct device_attribute *attr,
 				  const char *buf, size_t len) {
-	/* return 0; */
+	unsigned long dc = 0;
+	struct pwm_channel *ch = dev_get_drvdata(dev);
+
+	if (!kstrtol(buf, 10, &dc)) {
+		dc = dc > 100 ? 100 : dc;
+		ch->dc = dc;
+	}
+
+	return len;
 }
 
 
 static ssize_t duty_cycle_show(struct device *dev,
 				   struct device_attribute *attr, char *buf) {
-
-	/* struct nt3h1201_data *chip =  dev_get_drvdata(dev); */
-	/* u8 data[NFC_PAGE_SIZE] = {0x00}; */
-	/* _read_page(chip->client, NFC_PAGE_CONFIG, data); */
-	/* return sprintf(buf, "%d\n", data[NTAG_CONF_BYTE_NC_REG] & (0x01 << NC_REG_PTHRU_ON_OFF)); */
+	struct pwm_channel *ch = dev_get_drvdata(dev);
+	return sprintf(buf, "%d", ch->dc);
 }
 
 
 static ssize_t frequency_store(struct device *dev,
 				  struct device_attribute *attr,
 				  const char *buf, size_t len) {
-	/* return 0; */
+	unsigned long f = 0;
+	struct pwm_channel *ch = dev_get_drvdata(dev);
+
+	if (!kstrtol(buf, 10, &f)) {
+		unsigned long t_ns = (NANO_SEC)/f;
+
+		deinit_channel(ch);
+		ch->freq = f;
+
+		// restart timer1
+		ch->t1 = ktime_set( 0, t_ns );
+		hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
+	}
+
+	return len;
 }
 
 
 static ssize_t frequency_show(struct device *dev,
 				   struct device_attribute *attr, char *buf) {
-
-	/* struct nt3h1201_data *chip =  dev_get_drvdata(dev); */
-	/* u8 data[NFC_PAGE_SIZE] = {0x00}; */
-	/* _read_page(chip->client, NFC_PAGE_CONFIG, data); */
-	/* return sprintf(buf, "%d\n", data[NTAG_CONF_BYTE_NC_REG] & (0x01 << NC_REG_PTHRU_ON_OFF)); */
+	struct pwm_channel *ch = dev_get_drvdata(dev);
+	return sprintf(buf, "%d", ch->freq);
 }
 
 
