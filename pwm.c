@@ -410,7 +410,7 @@ static void __exit pwm_exit(void) {
 module_init(pwm_init);
 module_exit(pwm_exit);
 
-MODULE_AUTHOR("tw");
-MODULE_DESCRIPTION("HR PWM TESTS");
+MODULE_AUTHOR("Tomasz Wisniewski");
+MODULE_DESCRIPTION("hrtimer based pwm bit banger");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
