@@ -152,8 +152,8 @@ static ssize_t unexport_store(struct class *class, struct class_attribute *attr,
 
 
 static struct class_attribute soft_pwm_class_attrs[] = {
-	__ATTR(export, 0222, NULL, export_store),
-	__ATTR(unexport, 0222, NULL, unexport_store),
+	__ATTR(export, 0660, NULL, export_store),
+	__ATTR(unexport, 0660, NULL, unexport_store),
 	__ATTR_NULL,
 };
 
