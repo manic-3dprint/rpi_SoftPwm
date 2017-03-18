@@ -1,0 +1,8 @@
+*.cmd
+*.ko
+*.o
+.tmp_versions/
+nbproject/
+*.mod.c
+Module.symvers
+modules.order
