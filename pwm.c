@@ -32,26 +32,25 @@
 #define DEBUG 0
 
 
-#define MICRO_SEC	1000000
-#define NANO_SEC 	(MICRO_SEC*1000)
+#define MICRO_SEC 1000000
+#define NANO_SEC  (MICRO_SEC*1000)
 
 
-#define DEFAULT_FREQ		1000
-#define DEFAULT_DUTY_CYCLE	50
-
+#define DEFAULT_FREQ  1000
+#define DEFAULT_DUTY_CYCLE 50
 
 /**
  * @brief represents a single pwm channel
  */
 struct pwm_channel {
-	struct hrtimer tm1, tm2;
-	ktime_t t1;
-	int freq;
-	int dc;
-	int gpio;
+    struct hrtimer tm1, tm2;
+    ktime_t t1;
+    int freq;
+    int dc;
+    int gpio;
 
-	// linked list of channels
-	struct list_head chan_list;
+    // linked list of channels
+    struct list_head chan_list;
 };
 
 
@@ -61,7 +60,6 @@ struct pwm_channel {
 static LIST_HEAD(_channels);
 static struct mutex _lock;
 
-
 /**
  * @brief callback for timer 1 - responsible for the rising slope
  *
@@ -70,32 +68,30 @@ static struct mutex _lock;
  * @return _RESTART 
  */
 enum hrtimer_restart cb1(struct hrtimer *t) {
-	struct pwm_channel *ch = container_of(t, struct pwm_channel, tm1);
-	ktime_t now;
-	int ovr;
+    struct pwm_channel *ch = container_of(t, struct pwm_channel, tm1);
+    ktime_t now;
+    int ovr;
 
-	now = hrtimer_cb_get_time(t);
-	ovr = hrtimer_forward(t, now, ch->t1);
-	
+    now = hrtimer_cb_get_time(t);
+    ovr = hrtimer_forward(t, now, ch->t1);
+
 #if DEBUG == 1
-	printk(KERN_EMERG "up [%d]\n", ovr);
+    printk(KERN_EMERG "up [%d]\n", ovr);
 #endif
 
-	if (ch->dc) {
-		gpio_set_value(ch->gpio, 1);
-		if (ch->dc < 100) {
-			unsigned long t_ns = ((MICRO_SEC * 10 * ch->dc) / (ch->freq));
-			ktime_t t2 = ktime_set( 0, t_ns );
-			hrtimer_start(&ch->tm2, t2, HRTIMER_MODE_REL);
-		}
-	}
-	else {
-		gpio_set_value(ch->gpio, 0);
-	}
+    if (ch->dc) {
+        gpio_set_value(ch->gpio, 1);
+        if (ch->dc < 100) {
+            unsigned long t_ns = ((MICRO_SEC * 10 * ch->dc) / (ch->freq));
+            ktime_t t2 = ktime_set(0, t_ns);
+            hrtimer_start(&ch->tm2, t2, HRTIMER_MODE_REL);
+        }
+    } else {
+        gpio_set_value(ch->gpio, 0);
+    }
 
-	return HRTIMER_RESTART;
+    return HRTIMER_RESTART;
 }
-
 
 /**
  * @brief callback for timer 2 - responsible for falling slope
@@ -105,42 +101,40 @@ enum hrtimer_restart cb1(struct hrtimer *t) {
  * @return _NORESTART
  */
 enum hrtimer_restart cb2(struct hrtimer *t) {
-	struct pwm_channel *ch = container_of(t, struct pwm_channel, tm2);
+    struct pwm_channel *ch = container_of(t, struct pwm_channel, tm2);
 #if DEBUG == 1
-	printk(KERN_INFO "down\n");
+    printk(KERN_INFO "down\n");
 #endif
-	gpio_set_value(ch->gpio, 0);
-	return HRTIMER_NORESTART;
+    gpio_set_value(ch->gpio, 0);
+    return HRTIMER_NORESTART;
 }
-
 
 void init_channel(struct pwm_channel *a_ch) {
-	unsigned long t_ns = (NANO_SEC)/a_ch->freq;
+    unsigned long t_ns = (NANO_SEC) / a_ch->freq;
 
-	hrtimer_init(&a_ch->tm1, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	hrtimer_init(&a_ch->tm2, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    hrtimer_init(&a_ch->tm1, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    hrtimer_init(&a_ch->tm2, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 
-	a_ch->t1 = ktime_set( 0, t_ns );
-	a_ch->tm1.function = &cb1;
-	a_ch->tm2.function = &cb2;
+    a_ch->t1 = ktime_set(0, t_ns);
+    a_ch->tm1.function = &cb1;
+    a_ch->tm2.function = &cb2;
 
-	gpio_request(a_ch->gpio, "soft_pwm_gpio");
-	gpio_direction_output(a_ch->gpio, 1);
+    gpio_request(a_ch->gpio, "soft_pwm_gpio");
+    gpio_direction_output(a_ch->gpio, 1);
 
-	hrtimer_start(&a_ch->tm1, a_ch->t1, HRTIMER_MODE_REL);
+    hrtimer_start(&a_ch->tm1, a_ch->t1, HRTIMER_MODE_REL);
 }
 
-
 void deinit_channel(struct pwm_channel *a_ch) {
-	if (hrtimer_active(&a_ch->tm1) || hrtimer_is_queued(&a_ch->tm1)) {
-		hrtimer_cancel(&a_ch->tm1);
-	}
+    if (hrtimer_active(&a_ch->tm1) || hrtimer_is_queued(&a_ch->tm1)) {
+        hrtimer_cancel(&a_ch->tm1);
+    }
 
-	if (hrtimer_active(&a_ch->tm2) || hrtimer_is_queued(&a_ch->tm2)) {
-		hrtimer_cancel(&a_ch->tm2);
-	}
+    if (hrtimer_active(&a_ch->tm2) || hrtimer_is_queued(&a_ch->tm2)) {
+        hrtimer_cancel(&a_ch->tm2);
+    }
 
-	gpio_free(a_ch->gpio);
+    gpio_free(a_ch->gpio);
 }
 
 
@@ -152,16 +146,16 @@ static ssize_t unexport_store(struct class *class, struct class_attribute *attr,
 
 
 static struct class_attribute soft_pwm_class_attrs[] = {
-	__ATTR(export, 0660, NULL, export_store),
-	__ATTR(unexport, 0660, NULL, unexport_store),
-	__ATTR_NULL,
+    __ATTR(export, 0660, NULL, export_store),
+    __ATTR(unexport, 0660, NULL, unexport_store),
+    __ATTR_NULL,
 };
 
 
 static struct class soft_pwm_class = {
-	.name = "soft_pwm",
-	.owner = THIS_MODULE,
-	.class_attrs = soft_pwm_class_attrs,
+    .name = "soft_pwm",
+    .owner = THIS_MODULE,
+    .class_attrs = soft_pwm_class_attrs,
 };
 
 
@@ -175,235 +169,226 @@ static DEVICE_ATTR(frequency, 0644, frequency_show, frequency_store);
 
 
 static struct attribute *soft_pwm_dev_attrs[] = {
-	&dev_attr_duty_cycle.attr,
-	&dev_attr_frequency.attr,
-	NULL,
+    &dev_attr_duty_cycle.attr,
+    &dev_attr_frequency.attr,
+    NULL,
 };
 
 
 static struct attribute_group soft_pwm_dev_attr_group = {
-	.attrs = (struct attribute **)soft_pwm_dev_attrs,
+    .attrs = (struct attribute **) soft_pwm_dev_attrs,
 };
-
 
 /* ========================================================================== */
 
 static ssize_t duty_cycle_store(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t len) {
-	unsigned long dc = 0;
-	struct pwm_channel *ch = dev_get_drvdata(dev);
+        struct device_attribute *attr,
+        const char *buf, size_t len) {
+    unsigned long dc = 0;
+    struct pwm_channel *ch = dev_get_drvdata(dev);
 
-	if (!kstrtol(buf, 10, &dc)) {
-		dc = dc > 100 ? 100 : dc;
-		ch->dc = dc;
-	}
+    if (!kstrtol(buf, 10, &dc)) {
+        dc = dc > 100 ? 100 : dc;
+        ch->dc = dc;
+    }
 
-	return len;
+    return len;
 }
-
 
 static ssize_t duty_cycle_show(struct device *dev,
-				   struct device_attribute *attr, char *buf) {
-	struct pwm_channel *ch = dev_get_drvdata(dev);
-	return sprintf(buf, "%d", ch->dc);
+        struct device_attribute *attr, char *buf) {
+    struct pwm_channel *ch = dev_get_drvdata(dev);
+    return sprintf(buf, "%d", ch->dc);
 }
-
 
 static ssize_t frequency_store(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t len) {
-	unsigned long f = 0;
-	struct pwm_channel *ch = dev_get_drvdata(dev);
+        struct device_attribute *attr,
+        const char *buf, size_t len) {
+    unsigned long f = 0;
+    struct pwm_channel *ch = dev_get_drvdata(dev);
 
-	if (!kstrtol(buf, 10, &f)) {
-		unsigned long t_ns = (NANO_SEC)/f;
+    if (!kstrtol(buf, 10, &f)) {
+        unsigned long t_ns = (NANO_SEC) / f;
 
-		deinit_channel(ch);
-		ch->freq = f;
+        deinit_channel(ch);
+        ch->freq = f;
 
-		// restart timer1
-		ch->t1 = ktime_set( 0, t_ns );
-		hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
-	}
+        // restart timer1
+        ch->t1 = ktime_set(0, t_ns);
+        hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
+    }
 
-	return len;
+    return len;
 }
-
 
 static ssize_t frequency_show(struct device *dev,
-				   struct device_attribute *attr, char *buf) {
-	struct pwm_channel *ch = dev_get_drvdata(dev);
-	return sprintf(buf, "%d", ch->freq);
+        struct device_attribute *attr, char *buf) {
+    struct pwm_channel *ch = dev_get_drvdata(dev);
+    return sprintf(buf, "%d", ch->freq);
 }
 
+ssize_t export_store(struct class *class,
+        struct class_attribute *attr,
+        const char *buf,
+        size_t len) {
 
-ssize_t export_store(struct class *class, 
-		struct class_attribute *attr, 
-		const char *buf, 
-		size_t len) {
+    struct list_head *p = NULL;
+    struct pwm_channel *ch = NULL;
+    struct device *d = NULL;
 
-	struct list_head *p = NULL;
-	struct pwm_channel *ch = NULL;
-	struct device *d = NULL;
+    int found = 0;
+    unsigned long gpio = 0;
+    int rv = len;
 
-	int found = 0;
-	unsigned long gpio = 0;
-	int rv = len;
+    mutex_lock(&_lock);
 
-	mutex_lock(&_lock);
+    if (kstrtol(buf, 10, &gpio)) {
+        printk(KERN_ERR "invalid data [%s]\n", buf);
+        rv = -EINVAL;
+        goto label_export_cleanup;
+    }
 
-	if (kstrtol(buf, 10, &gpio)) {
-		printk(KERN_ERR "invalid data [%s]\n", buf);
-		rv = -EINVAL;
-		goto label_export_cleanup;
-	}
+    list_for_each(p, &_channels) {
+        ch = list_entry(p, struct pwm_channel, chan_list);
+        if (ch->gpio == gpio) {
+            found = 1;
+            break;
+        }
+    }
 
-	list_for_each (p, &_channels) {
-		ch = list_entry(p, struct pwm_channel, chan_list);
-		if (ch->gpio == gpio) {
-			found = 1;
-			break;
-		}
-	}
+    if (found) {
+        // channel for the given gpio already exists
+        // ignore the request
+        printk(KERN_ERR "channel for the gpio already allocated\n");
+        goto label_export_cleanup;
+    }
 
-	if (found) {
-		// channel for the given gpio already exists
-		// ignore the request
-		printk(KERN_ERR "channel for the gpio already allocated\n");
-		goto label_export_cleanup;
-	}
+    // create the channel
+    if (!(ch = kmalloc(sizeof (struct pwm_channel), GFP_KERNEL))) {
+        printk(KERN_ERR "Unable to allocate memory for the channel\n");
+        rv = -ENOMEM;
+        goto label_export_cleanup;
+    }
 
-	// create the channel
-	if (!(ch = kmalloc(sizeof(struct pwm_channel), GFP_KERNEL))) {
-		printk(KERN_ERR "Unable to allocate memory for the channel\n");
-		rv = -ENOMEM;
-		goto label_export_cleanup;
-	}
+    // initialize the channel 
+    ch->gpio = gpio;
+    ch->freq = DEFAULT_FREQ;
+    ch->dc = DEFAULT_DUTY_CYCLE;
+    INIT_LIST_HEAD(&ch->chan_list);
 
-	// initialize the channel 
-	ch->gpio = gpio;
-	ch->freq = DEFAULT_FREQ;
-	ch->dc = DEFAULT_DUTY_CYCLE;
-	INIT_LIST_HEAD(&ch->chan_list);
+    // create sysfs entries
+    if (!(d =
+            device_create(&soft_pwm_class, NULL, MKDEV(0, 0), ch, "pwm-%d", (int) gpio))) {
+        printk(KERN_ERR "Unable to create the pwm-%d device\n", (int) gpio);
+        rv = -ENOMEM;
+        goto label_export_cleanup;
+    }
 
-	// create sysfs entries
-	if (!(d = 
-		device_create(&soft_pwm_class, NULL, MKDEV(0,0), ch, "pwm-%d", (int)gpio))) {
-		printk(KERN_ERR "Unable to create the pwm-%d device\n", (int)gpio);
-		rv = -ENOMEM;				
-		goto label_export_cleanup;
-	}
+    if (sysfs_create_group(&d->kobj, &soft_pwm_dev_attr_group)) {
+        printk(KERN_ERR "Unable to create attributes for channel %d\n", (int) gpio);
+        rv = -ENODEV;
+        goto label_export_cleanup;
+    }
 
-	if (sysfs_create_group(&d->kobj, &soft_pwm_dev_attr_group)) {
-		printk(KERN_ERR "Unable to create attributes for channel %d\n", (int)gpio);
-		rv = -ENODEV;				
-		goto label_export_cleanup;
-	}
-
-	// ... and finally - initialize channel's timers
-	init_channel(ch);
-	list_add(&ch->chan_list, &_channels);
-	goto label_export_exit;
+    // ... and finally - initialize channel's timers
+    init_channel(ch);
+    list_add(&ch->chan_list, &_channels);
+    goto label_export_exit;
 
 label_export_cleanup:
-	if (d) device_unregister(d);
-	if (ch) kfree(ch);
+    if (d) device_unregister(d);
+    if (ch) kfree(ch);
 
 label_export_exit:
-	mutex_unlock(&_lock);
-	return rv;
+    mutex_unlock(&_lock);
+    return rv;
 }
-
 
 static int _match_channel(struct device *dev, const void *data) {
-	return dev_get_drvdata(dev) == data;
+    return dev_get_drvdata(dev) == data;
 }
 
+ssize_t unexport_store(struct class *class,
+        struct class_attribute *attr,
+        const char *buf,
+        size_t len) {
 
-ssize_t unexport_store(struct class *class, 
-		struct class_attribute *attr, 
-		const char *buf, 
-		size_t len) {
+    struct list_head *p = NULL;
+    struct pwm_channel *ch = NULL;
+    struct device *d = NULL;
 
-	struct list_head *p = NULL;
-	struct pwm_channel *ch = NULL;
-	struct device *d = NULL;
+    int found = 0;
+    long gpio = 0;
 
-	int found = 0;
-	long gpio = 0;
+    if (kstrtol(buf, 10, &gpio)) {
+        printk(KERN_ERR "invalid data [%s]\n", buf);
+        return -EINVAL;
+    }
 
-	if (kstrtol(buf, 10, &gpio)) {
-		printk(KERN_ERR "invalid data [%s]\n", buf);
-		return -EINVAL;
-	}
+    list_for_each(p, &_channels) {
+        ch = list_entry(p, struct pwm_channel, chan_list);
+        if (ch->gpio == gpio) {
+            found = 1;
+            break;
+        }
+    }
 
-	list_for_each (p, &_channels) {
-		ch = list_entry(p, struct pwm_channel, chan_list);
-		if (ch->gpio == gpio) {
-			found = 1;
-			break;
-		}
-	}
+    if (!found) {
+        // channel for the given gpio doesn't exists
+        // ignore the request
+        return len;
+    }
 
-	if (!found) {
-		// channel for the given gpio doesn't exists
-		// ignore the request
-		return len;
-	}
+    if ((d = class_find_device(&soft_pwm_class, NULL, ch, _match_channel))) {
+        put_device(d);
+        device_unregister(d);
+    }
 
-	if ((d = class_find_device(&soft_pwm_class, NULL, ch, _match_channel))) {
-		put_device(d);
-		device_unregister(d);
-	}
+    deinit_channel(ch);
+    list_del(&ch->chan_list);
+    kfree(ch);
 
-	deinit_channel(ch);
-	list_del(&ch->chan_list);
-	kfree(ch);
-	
-	return len;
+    return len;
 }
-
 
 /* ========================================================================== */
 
 
 static int __init pwm_init(void) {
 #if DEBUG == 1
-	printk(KERN_INFO "installing soft pwm module\n");
+    printk(KERN_INFO "installing soft pwm module\n");
 #endif
 
-	mutex_init(&_lock);
-	return class_register(&soft_pwm_class);
+    mutex_init(&_lock);
+    return class_register(&soft_pwm_class);
 }
 
-
 static void __exit pwm_exit(void) {
-	struct list_head *p = NULL;
-	struct list_head *q = NULL;
-	struct pwm_channel *ch = NULL;
-	struct device *d = NULL;
+    struct list_head *p = NULL;
+    struct list_head *q = NULL;
+    struct pwm_channel *ch = NULL;
+    struct device *d = NULL;
 
 #if DEBUG == 1
-	printk(KERN_INFO "deinstalling soft pwm module\n");
+    printk(KERN_INFO "deinstalling soft pwm module\n");
 #endif
 
-	list_for_each_safe(p, q, &_channels) {
-		ch = list_entry(p, struct pwm_channel, chan_list);
+    list_for_each_safe(p, q, &_channels) {
+        ch = list_entry(p, struct pwm_channel, chan_list);
 
-		if ((d = class_find_device(&soft_pwm_class, 
-						NULL, 
-						ch, 
-						_match_channel))) {
-			put_device(d);
-			device_unregister(d);
-		}
-		deinit_channel(ch);
-		list_del(p);
-		kfree(ch);
-	}
+        if ((d = class_find_device(&soft_pwm_class,
+                NULL,
+                ch,
+                _match_channel))) {
+            put_device(d);
+            device_unregister(d);
+        }
+        deinit_channel(ch);
+        list_del(p);
+        kfree(ch);
+    }
 
-	class_unregister(&soft_pwm_class);
+    class_unregister(&soft_pwm_class);
 }
 
 
