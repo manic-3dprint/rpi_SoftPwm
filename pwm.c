@@ -32,12 +32,9 @@
 #define DEBUG 0
 
 
-#define MICRO_SEC 1000000
-#define NANO_SEC  (MICRO_SEC*1000)
 
-
-#define DEFAULT_FREQ  1000
-#define DEFAULT_DUTY_CYCLE 50
+#define DEFAULT_DUTY_CYCLE 1500000 //1.5ms
+#define DEFAULT_PERIOD  20000000 // 20ms
 
 /**
  * @brief represents a single pwm channel
@@ -45,10 +42,9 @@
 struct pwm_channel {
     struct hrtimer tm1, tm2;
     ktime_t t1;
-    int freq;
-    int dc;
     int gpio;
-
+    unsigned long duty_cycle_ns;
+    unsigned long period_ns;
     // linked list of channels
     struct list_head chan_list;
 };
@@ -79,11 +75,10 @@ enum hrtimer_restart cb1(struct hrtimer *t) {
     printk(KERN_EMERG "up [%d]\n", ovr);
 #endif
 
-    if (ch->dc) {
+    if (ch->duty_cycle_ns) {
         gpio_set_value(ch->gpio, 1);
-        if (ch->dc < 100) {
-            unsigned long t_ns = ((MICRO_SEC * 10 * ch->dc) / (ch->freq));
-            ktime_t t2 = ktime_set(0, t_ns);
+        if (ch->duty_cycle_ns < ch->period_ns) {
+            ktime_t t2 = ktime_set(0, ch->duty_cycle_ns);
             hrtimer_start(&ch->tm2, t2, HRTIMER_MODE_REL);
         }
     } else {
@@ -110,12 +105,10 @@ enum hrtimer_restart cb2(struct hrtimer *t) {
 }
 
 void init_channel(struct pwm_channel *a_ch) {
-    unsigned long t_ns = (NANO_SEC) / a_ch->freq;
-
     hrtimer_init(&a_ch->tm1, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     hrtimer_init(&a_ch->tm2, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 
-    a_ch->t1 = ktime_set(0, t_ns);
+    a_ch->t1 = ktime_set(0, a_ch->period_ns);
     a_ch->tm1.function = &cb1;
     a_ch->tm2.function = &cb2;
 
@@ -158,19 +151,18 @@ static struct class soft_pwm_class = {
     .class_attrs = soft_pwm_class_attrs,
 };
 
+static ssize_t duty_cycle_ns_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
+static ssize_t duty_cycle_ns_show(struct device *dev, struct device_attribute *attr, char *buf);
+static ssize_t period_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
+static ssize_t period_show(struct device *dev, struct device_attribute *attr, char *buf);
 
-static ssize_t duty_cycle_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
-static ssize_t duty_cycle_show(struct device *dev, struct device_attribute *attr, char *buf);
-static ssize_t frequency_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
-static ssize_t frequency_show(struct device *dev, struct device_attribute *attr, char *buf);
-
-static DEVICE_ATTR(duty_cycle, 0644, duty_cycle_show, duty_cycle_store);
-static DEVICE_ATTR(frequency, 0644, frequency_show, frequency_store);
+static DEVICE_ATTR(duty_cycle_ns, 0644, duty_cycle_ns_show, duty_cycle_ns_store);
+static DEVICE_ATTR(period_ns, 0644, period_show, period_store);
 
 
 static struct attribute *soft_pwm_dev_attrs[] = {
-    &dev_attr_duty_cycle.attr,
-    &dev_attr_frequency.attr,
+    &dev_attr_duty_cycle_ns.attr,
+    &dev_attr_period_ns.attr,
     NULL,
 };
 
@@ -180,51 +172,48 @@ static struct attribute_group soft_pwm_dev_attr_group = {
 };
 
 /* ========================================================================== */
-
-static ssize_t duty_cycle_store(struct device *dev,
+static ssize_t duty_cycle_ns_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
-    unsigned long dc = 0;
+    unsigned long duty_cycle = 0;
     struct pwm_channel *ch = dev_get_drvdata(dev);
 
-    if (!kstrtol(buf, 10, &dc)) {
-        dc = dc > 100 ? 100 : dc;
-        ch->dc = dc;
+    if (!kstrtol(buf, 10, &duty_cycle)) {
+        if (duty_cycle < ch->period_ns)
+            ch->duty_cycle_ns = duty_cycle;
     }
 
     return len;
 }
 
-static ssize_t duty_cycle_show(struct device *dev,
+static ssize_t duty_cycle_ns_show(struct device *dev,
         struct device_attribute *attr, char *buf) {
     struct pwm_channel *ch = dev_get_drvdata(dev);
-    return sprintf(buf, "%d", ch->dc);
+    return sprintf(buf, "%lu", ch->duty_cycle_ns);
 }
 
-static ssize_t frequency_store(struct device *dev,
+static ssize_t period_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
-    unsigned long f = 0;
+    unsigned long period = 0;
     struct pwm_channel *ch = dev_get_drvdata(dev);
 
-    if (!kstrtol(buf, 10, &f)) {
-        unsigned long t_ns = (NANO_SEC) / f;
-
+    if (!kstrtol(buf, 10, &period)) {
         deinit_channel(ch);
-        ch->freq = f;
+        ch->period_ns = period;
 
         // restart timer1
-        ch->t1 = ktime_set(0, t_ns);
+        ch->t1 = ktime_set(0, ch->period_ns);
         hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
     }
 
     return len;
 }
 
-static ssize_t frequency_show(struct device *dev,
+static ssize_t period_show(struct device *dev,
         struct device_attribute *attr, char *buf) {
     struct pwm_channel *ch = dev_get_drvdata(dev);
-    return sprintf(buf, "%d", ch->freq);
+    return sprintf(buf, "%lu", ch->period_ns);
 }
 
 ssize_t export_store(struct class *class,
@@ -272,8 +261,8 @@ ssize_t export_store(struct class *class,
 
     // initialize the channel 
     ch->gpio = gpio;
-    ch->freq = DEFAULT_FREQ;
-    ch->dc = DEFAULT_DUTY_CYCLE;
+    ch->period_ns = DEFAULT_PERIOD;
+    ch->duty_cycle_ns = DEFAULT_DUTY_CYCLE;        
     INIT_LIST_HEAD(&ch->chan_list);
 
     // create sysfs entries
@@ -352,13 +341,13 @@ ssize_t unexport_store(struct class *class,
 }
 
 /* ========================================================================== */
-
-
 static int __init pwm_init(void) {
 #if DEBUG == 1
     printk(KERN_INFO "installing soft pwm module\n");
-#endif
-
+#endif    
+    float a=(float)DEFAULT_DUTY_CYCLE/(float)DEFAULT_PERIOD *100;
+    printk(KERN_ERR "default duty cycle = %d.%02d%%", (int) a, ((int) (a * 1000)) % 1000);
+    
     mutex_init(&_lock);
     return class_register(&soft_pwm_class);
 }
