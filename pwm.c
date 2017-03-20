@@ -155,18 +155,21 @@ static struct class soft_pwm_class = {
 static ssize_t duty_cycle_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 static ssize_t duty_cycle_ns_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 static ssize_t duty_cycle_ns_show(struct device *dev, struct device_attribute *attr, char *buf);
-static ssize_t period_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
-static ssize_t period_show(struct device *dev, struct device_attribute *attr, char *buf);
+static ssize_t period_ns_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
+static ssize_t period_ns_show(struct device *dev, struct device_attribute *attr, char *buf);
+static ssize_t frequency_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 
+static DEVICE_ATTR(frequency, 0644, NULL, frequency_store);
 static DEVICE_ATTR(duty_cycle, 0644, NULL, duty_cycle_store);
 static DEVICE_ATTR(duty_cycle_ns, 0644, duty_cycle_ns_show, duty_cycle_ns_store);
-static DEVICE_ATTR(period_ns, 0644, period_show, period_store);
+static DEVICE_ATTR(period_ns, 0644, period_ns_show, period_ns_store);
 
 
 static struct attribute *soft_pwm_dev_attrs[] = {
     &dev_attr_duty_cycle.attr,
     &dev_attr_duty_cycle_ns.attr,
     &dev_attr_period_ns.attr,
+    &dev_attr_frequency.attr,
     NULL,
 };
 
@@ -176,6 +179,34 @@ static struct attribute_group soft_pwm_dev_attr_group = {
 };
 
 /* ========================================================================== */
+#define MICRO_SEC 1000000
+#define NANO_SEC  (MICRO_SEC*1000)
+
+static ssize_t frequency_store(struct device *dev,
+        struct device_attribute *attr,
+        const char *buf, size_t len) {
+    unsigned long f = 0;
+    struct pwm_channel *ch = dev_get_drvdata(dev);
+
+    if (!kstrtol(buf, 10, &f)) {
+        unsigned long t_ns = (NANO_SEC) / f;
+
+        deinit_channel(ch);
+        ch->period_ns = t_ns;
+        if (ch->duty_cycle_ns > ch->period_ns) {
+            ch->duty_cycle_ns = ch->period_ns / 2;
+        }
+#if DEBUG == 1        
+        printk(KERN_ERR "new cycle period = %lu", ch->period_ns);
+#endif        
+        // restart timer1
+        ch->t1 = ktime_set(0, t_ns);
+        hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
+    }
+
+    return len;
+}
+
 static ssize_t duty_cycle_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
@@ -215,7 +246,7 @@ static ssize_t duty_cycle_ns_show(struct device *dev,
     return sprintf(buf, "%lu", ch->duty_cycle_ns);
 }
 
-static ssize_t period_store(struct device *dev,
+static ssize_t period_ns_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
     unsigned long period = 0;
@@ -235,7 +266,7 @@ static ssize_t period_store(struct device *dev,
     return len;
 }
 
-static ssize_t period_show(struct device *dev,
+static ssize_t period_ns_show(struct device *dev,
         struct device_attribute *attr, char *buf) {
     struct pwm_channel *ch = dev_get_drvdata(dev);
     return sprintf(buf, "%lu", ch->period_ns);
