@@ -181,14 +181,14 @@ static ssize_t duty_cycle_store(struct device *dev,
         const char *buf, size_t len) {
     unsigned long dc = 0;
 
-   
+
     struct pwm_channel *ch = dev_get_drvdata(dev);
 
     if (!kstrtol(buf, 10, &dc)) {
         dc = dc > 100 ? 100 : dc;
         ch->duty_cycle_ns = ch->period_ns * dc / 100;
 #if DEBUG == 1
-        printk(KERN_ERR "new duty cycle = %lu",ch->duty_cycle_ns);
+        printk(KERN_ERR "new duty cycle = %lu", ch->duty_cycle_ns);
 #endif
     }
 
@@ -202,7 +202,7 @@ static ssize_t duty_cycle_ns_store(struct device *dev,
     struct pwm_channel *ch = dev_get_drvdata(dev);
 
     if (!kstrtol(buf, 10, &duty_cycle)) {
-        if (duty_cycle < ch->period_ns)
+        if (duty_cycle <= ch->period_ns)
             ch->duty_cycle_ns = duty_cycle;
     }
 
@@ -225,7 +225,7 @@ static ssize_t period_store(struct device *dev,
         deinit_channel(ch);
         ch->period_ns = period;
         if (ch->duty_cycle_ns > ch->period_ns) {
-            ch->duty_cycle_ns=0;
+            ch->duty_cycle_ns = 0;
         }
         // restart timer1
         ch->t1 = ktime_set(0, ch->period_ns);
@@ -369,10 +369,10 @@ ssize_t unexport_store(struct class *class,
 static int __init pwm_init(void) {
 #if DEBUG == 1
     printk(KERN_INFO "installing soft pwm module\n");
-#endif    
+
     float a = (float) DEFAULT_DUTY_CYCLE / (float) DEFAULT_PERIOD * 100;
     printk(KERN_ERR "default duty cycle = %d.%02d%%", (int) a, ((int) (a * 1000)) % 1000);
-
+#endif    
     mutex_init(&_lock);
     return class_register(&soft_pwm_class);
 }
