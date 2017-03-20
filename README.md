@@ -65,13 +65,13 @@ gpio line, just echo the line number to the export file:
 
 	echo 4 > /sys/class/soft_pwm/export
 
-This will create a PWM channel for gpio line 4. pwm-4 sysfs class should now be created to
-control the channel. There are two relevant files:
+This will create a PWM channel for gpio line 4. pwm-4 sysfs class should now be created 
+in /sys/class/soft_pwm to control the channel. There are relevant files:
 
-* /sys/class/soft_pwm/period_ns - to control the PWM period in nano second, by default 20000000ns(20ms)
-* /sys/class/soft_pwm/duty_cycle_ns - to control the duty_cycle of the pulse in nano second, by default 1500000ns(1.5ms)
-* /sys/class/soft_pwm/duty_cycle - to control the duty_cycle of the pulse in percentage (0-100)
-
+* /sys/class/soft_pwm/pwm-4/frequency - to control the PWM frequency, by default 50Hz, i.e cycle period 20ms.
+* /sys/class/soft_pwm/pwm-4/period_ns - to control the PWM period in nano second, by default 20000000ns(20ms)
+* /sys/class/soft_pwm/pwm-4/duty_cycle_ns - to control the duty_cycle of the pulse in nano second, by default 1500000ns(1.5ms)
+* /sys/class/soft_pwm/pwm-4/duty_cycle - to control the duty_cycle of the pulse in percentage (0-100)
 
 You can create as many channels as you want (as far as the system can handle it).
 All the channels are independent.
