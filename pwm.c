@@ -115,6 +115,7 @@ void init_channel(struct pwm_channel *a_ch) {
     gpio_request(a_ch->gpio, "soft_pwm_gpio");
     gpio_direction_output(a_ch->gpio, 1);
 
+
     hrtimer_start(&a_ch->tm1, a_ch->t1, HRTIMER_MODE_REL);
 }
 
@@ -151,16 +152,19 @@ static struct class soft_pwm_class = {
     .class_attrs = soft_pwm_class_attrs,
 };
 
+static ssize_t duty_cycle_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 static ssize_t duty_cycle_ns_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 static ssize_t duty_cycle_ns_show(struct device *dev, struct device_attribute *attr, char *buf);
 static ssize_t period_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 static ssize_t period_show(struct device *dev, struct device_attribute *attr, char *buf);
 
+static DEVICE_ATTR(duty_cycle, 0644, NULL, duty_cycle_store);
 static DEVICE_ATTR(duty_cycle_ns, 0644, duty_cycle_ns_show, duty_cycle_ns_store);
 static DEVICE_ATTR(period_ns, 0644, period_show, period_store);
 
 
 static struct attribute *soft_pwm_dev_attrs[] = {
+    &dev_attr_duty_cycle.attr,
     &dev_attr_duty_cycle_ns.attr,
     &dev_attr_period_ns.attr,
     NULL,
@@ -172,6 +176,25 @@ static struct attribute_group soft_pwm_dev_attr_group = {
 };
 
 /* ========================================================================== */
+static ssize_t duty_cycle_store(struct device *dev,
+        struct device_attribute *attr,
+        const char *buf, size_t len) {
+    unsigned long dc = 0;
+
+   
+    struct pwm_channel *ch = dev_get_drvdata(dev);
+
+    if (!kstrtol(buf, 10, &dc)) {
+        dc = dc > 100 ? 100 : dc;
+        ch->duty_cycle_ns = ch->period_ns * dc / 100;
+#if DEBUG == 1
+        printk(KERN_ERR "new duty cycle = %lu",ch->duty_cycle_ns);
+#endif
+    }
+
+    return len;
+}
+
 static ssize_t duty_cycle_ns_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
@@ -201,7 +224,9 @@ static ssize_t period_store(struct device *dev,
     if (!kstrtol(buf, 10, &period)) {
         deinit_channel(ch);
         ch->period_ns = period;
-
+        if (ch->duty_cycle_ns > ch->period_ns) {
+            ch->duty_cycle_ns=0;
+        }
         // restart timer1
         ch->t1 = ktime_set(0, ch->period_ns);
         hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
@@ -262,7 +287,7 @@ ssize_t export_store(struct class *class,
     // initialize the channel 
     ch->gpio = gpio;
     ch->period_ns = DEFAULT_PERIOD;
-    ch->duty_cycle_ns = DEFAULT_DUTY_CYCLE;        
+    ch->duty_cycle_ns = DEFAULT_DUTY_CYCLE;
     INIT_LIST_HEAD(&ch->chan_list);
 
     // create sysfs entries
@@ -345,9 +370,9 @@ static int __init pwm_init(void) {
 #if DEBUG == 1
     printk(KERN_INFO "installing soft pwm module\n");
 #endif    
-    float a=(float)DEFAULT_DUTY_CYCLE/(float)DEFAULT_PERIOD *100;
+    float a = (float) DEFAULT_DUTY_CYCLE / (float) DEFAULT_PERIOD * 100;
     printk(KERN_ERR "default duty cycle = %d.%02d%%", (int) a, ((int) (a * 1000)) % 1000);
-    
+
     mutex_init(&_lock);
     return class_register(&soft_pwm_class);
 }
