@@ -127,14 +127,10 @@ void deinit_channel(struct pwm_channel *a_ch) {
     if (hrtimer_active(&a_ch->tm2) || hrtimer_is_queued(&a_ch->tm2)) {
         hrtimer_cancel(&a_ch->tm2);
     }
-
-    gpio_free(a_ch->gpio);
 }
 
 
 /* ========================================================================== */
-
-
 static ssize_t export_store(struct class *class, struct class_attribute *attr, const char *buf, size_t len);
 static ssize_t unexport_store(struct class *class, struct class_attribute *attr, const char *buf, size_t len);
 
@@ -196,9 +192,9 @@ static ssize_t frequency_store(struct device *dev,
         if (ch->duty_cycle_ns > ch->period_ns) {
             ch->duty_cycle_ns = ch->period_ns / 2;
         }
-#if DEBUG == 1        
+   
         printk(KERN_ERR "new cycle period = %lu", ch->period_ns);
-#endif        
+    
         // restart timer1
         ch->t1 = ktime_set(0, t_ns);
         hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
@@ -389,6 +385,7 @@ ssize_t unexport_store(struct class *class,
     }
 
     deinit_channel(ch);
+    gpio_free(ch->gpio);
     list_del(&ch->chan_list);
     kfree(ch);
 
@@ -427,6 +424,7 @@ static void __exit pwm_exit(void) {
             put_device(d);
             device_unregister(d);
         }
+        gpio_free(ch->gpio);
         deinit_channel(ch);
         list_del(p);
         kfree(ch);
