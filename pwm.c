@@ -159,10 +159,10 @@ static ssize_t period_ns_store(struct device *dev, struct device_attribute *attr
 static ssize_t period_ns_show(struct device *dev, struct device_attribute *attr, char *buf);
 static ssize_t frequency_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 
-static DEVICE_ATTR(frequency, 0644, NULL, frequency_store);
-static DEVICE_ATTR(duty_cycle, 0644, NULL, duty_cycle_store);
-static DEVICE_ATTR(duty_cycle_ns, 0644, duty_cycle_ns_show, duty_cycle_ns_store);
-static DEVICE_ATTR(period_ns, 0644, period_ns_show, period_ns_store);
+static DEVICE_ATTR(frequency, 0220, NULL, frequency_store);
+static DEVICE_ATTR(duty_cycle, 0220, NULL, duty_cycle_store);
+static DEVICE_ATTR(duty_cycle_ns, 0660, duty_cycle_ns_show, duty_cycle_ns_store);
+static DEVICE_ATTR(period_ns, 0660, period_ns_show, period_ns_store);
 
 
 static struct attribute *soft_pwm_dev_attrs[] = {
@@ -322,8 +322,7 @@ ssize_t export_store(struct class *class,
     INIT_LIST_HEAD(&ch->chan_list);
 
     // create sysfs entries
-    if (!(d =
-            device_create(&soft_pwm_class, NULL, MKDEV(0, 0), ch, "pwm-%d", (int) gpio))) {
+    if (!(d =device_create(&soft_pwm_class, NULL, MKDEV(0, 0), ch, "pwm-%d", (int) gpio))) {
         printk(KERN_ERR "Unable to create the pwm-%d device\n", (int) gpio);
         rv = -ENOMEM;
         goto label_export_cleanup;
