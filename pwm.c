@@ -72,7 +72,7 @@ enum hrtimer_restart cb1(struct hrtimer *t) {
     ovr = hrtimer_forward(t, now, ch->t1);
 
 #if DEBUG == 1
-    printk(KERN_EMERG "up [%d]\n", ovr);
+    printk(KERN_INFO "up [%d]\n", ovr);
 #endif
 
     if (ch->duty_cycle_ns) {
@@ -192,9 +192,9 @@ static ssize_t frequency_store(struct device *dev,
         if (ch->duty_cycle_ns > ch->period_ns) {
             ch->duty_cycle_ns = ch->period_ns / 2;
         }
-   
-        printk(KERN_ERR "new cycle period = %lu", ch->period_ns);
-    
+#if DEBUG == 1
+        printk(KERN_INFO "new cycle period = %lu", ch->period_ns);
+#endif
         // restart timer1
         ch->t1 = ktime_set(0, t_ns);
         hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
@@ -215,7 +215,7 @@ static ssize_t duty_cycle_store(struct device *dev,
         dc = dc > 100 ? 100 : dc;
         ch->duty_cycle_ns = ch->period_ns * dc / 100;
 #if DEBUG == 1
-        printk(KERN_ERR "new duty cycle = %lu", ch->duty_cycle_ns);
+        printk(KERN_INFO "new duty cycle = %lu", ch->duty_cycle_ns);
 #endif
     }
 
@@ -256,6 +256,7 @@ static ssize_t period_ns_store(struct device *dev,
         }
         // restart timer1
         ch->t1 = ktime_set(0, ch->period_ns);
+        gpio_direction_output(ch->gpio, 1); //needed for rpi zero 
         hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
     }
 
@@ -284,7 +285,7 @@ ssize_t export_store(struct class *class,
     mutex_lock(&_lock);
 
     if (kstrtol(buf, 10, &gpio)) {
-        printk(KERN_ERR "invalid data [%s]\n", buf);
+        printk(KERN_INFO "invalid data [%s]\n", buf);
         rv = -EINVAL;
         goto label_export_cleanup;
     }
@@ -300,13 +301,13 @@ ssize_t export_store(struct class *class,
     if (found) {
         // channel for the given gpio already exists
         // ignore the request
-        printk(KERN_ERR "channel for the gpio already allocated\n");
+        printk(KERN_INFO "channel for the gpio already allocated\n");
         goto label_export_cleanup;
     }
 
     // create the channel
     if (!(ch = kmalloc(sizeof (struct pwm_channel), GFP_KERNEL))) {
-        printk(KERN_ERR "Unable to allocate memory for the channel\n");
+        printk(KERN_INFO "Unable to allocate memory for the channel\n");
         rv = -ENOMEM;
         goto label_export_cleanup;
     }
@@ -318,14 +319,14 @@ ssize_t export_store(struct class *class,
     INIT_LIST_HEAD(&ch->chan_list);
 
     // create sysfs entries
-    if (!(d =device_create(&soft_pwm_class, NULL, MKDEV(0, 0), ch, "pwm-%d", (int) gpio))) {
-        printk(KERN_ERR "Unable to create the pwm-%d device\n", (int) gpio);
+    if (!(d = device_create(&soft_pwm_class, NULL, MKDEV(0, 0), ch, "pwm-%d", (int) gpio))) {
+        printk(KERN_INFO "Unable to create the pwm-%d device\n", (int) gpio);
         rv = -ENOMEM;
         goto label_export_cleanup;
     }
 
     if (sysfs_create_group(&d->kobj, &soft_pwm_dev_attr_group)) {
-        printk(KERN_ERR "Unable to create attributes for channel %d\n", (int) gpio);
+        printk(KERN_INFO "Unable to create attributes for channel %d\n", (int) gpio);
         rv = -ENODEV;
         goto label_export_cleanup;
     }
@@ -361,7 +362,7 @@ ssize_t unexport_store(struct class *class,
     long gpio = 0;
 
     if (kstrtol(buf, 10, &gpio)) {
-        printk(KERN_ERR "invalid data [%s]\n", buf);
+        printk(KERN_INFO "invalid data [%s]\n", buf);
         return -EINVAL;
     }
 
@@ -395,10 +396,10 @@ ssize_t unexport_store(struct class *class,
 /* ========================================================================== */
 static int __init pwm_init(void) {
 #if DEBUG == 1
+    float a;
     printk(KERN_INFO "installing soft pwm module\n");
-
-    float a = (float) DEFAULT_DUTY_CYCLE / (float) DEFAULT_PERIOD * 100;
-    printk(KERN_ERR "default duty cycle = %d.%02d%%", (int) a, ((int) (a * 1000)) % 1000);
+    a = (float) DEFAULT_DUTY_CYCLE / (float) DEFAULT_PERIOD * 100;
+    printk(KERN_INFO "default duty cycle = %d.%02d%%", (int) a, ((int) (a * 1000)) % 1000);
 #endif    
     mutex_init(&_lock);
     return class_register(&soft_pwm_class);
