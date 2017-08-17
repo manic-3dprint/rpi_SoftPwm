@@ -2,9 +2,29 @@
 
 This module provides soft PWM capability to raspberry pi. 
 
-# Cross - Compilation
 
-In order to compile the module, you need:
+# Compilation in Raspbian
+1. Update kernel and install kernel header files
+```
+	$ apt-get install --only-upgrade raspberrypi-kernel
+	$ apt-get install raspberrypi-kernel-headers
+```	
+	do reboot after kernel update
+2. Build
+```
+	$ cd rpi_SoftPwm	
+	$ make M=$(pwd) -C /lib/modules/$(uname -r)/build modules	
+	$ make M=$(pwd) -C /lib/modules/$(uname -r)/build modules_install	
+	$ depmod -a	
+	$ modprobe soft_pwm
+```
+3. Auto loading while boot up
+
+	add soft_pwm to /etc/modules
+
+# Cross Compilation
+
+In order to cross compiling the module, you need:
 
 * raspberry pi's kernel sources
 * toolchain
@@ -50,7 +70,7 @@ to build and install the module.
 
 On the pi
 
-	$ sudo insmod pwm.ko
+	$ sudo insmod soft_pwm.ko
 
 
 # Usage
