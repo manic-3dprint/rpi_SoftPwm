@@ -45,6 +45,7 @@ struct pwm_channel {
     int gpio;
     unsigned long duty_cycle_ns;
     unsigned long period_ns;
+    int steps;
     // linked list of channels
     struct list_head chan_list;
 };
@@ -64,6 +65,7 @@ static struct mutex _lock;
  * @return _RESTART 
  */
 enum hrtimer_restart cb1(struct hrtimer *t) {
+    enum hrtimer_restart ret = HRTIMER_RESTART;
     struct pwm_channel *ch = container_of(t, struct pwm_channel, tm1);
     ktime_t now;
     int ovr;
@@ -77,15 +79,23 @@ enum hrtimer_restart cb1(struct hrtimer *t) {
 
     if (ch->duty_cycle_ns) {
         gpio_set_value(ch->gpio, 1);
+
         if (ch->duty_cycle_ns < ch->period_ns) {
             ktime_t t2 = ktime_set(0, ch->duty_cycle_ns);
             hrtimer_start(&ch->tm2, t2, HRTIMER_MODE_REL);
         }
+        if (ch->steps > 0) {
+            ch->steps--;
+            //printk(KERN_INFO "steps is %d\n", ch->steps);
+        }
+        if (ch->steps == 0) {
+            //printk(KERN_INFO "steps is %d, timer not restarting\n", ch->steps);
+            ret = HRTIMER_NORESTART;
+        }
     } else {
         gpio_set_value(ch->gpio, 0);
     }
-
-    return HRTIMER_RESTART;
+    return ret;
 }
 
 /**
@@ -154,18 +164,21 @@ static ssize_t duty_cycle_ns_show(struct device *dev, struct device_attribute *a
 static ssize_t period_ns_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
 static ssize_t period_ns_show(struct device *dev, struct device_attribute *attr, char *buf);
 static ssize_t frequency_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
+static ssize_t steps_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
+static ssize_t steps_show(struct device *dev, struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(frequency, 0220, NULL, frequency_store);
 static DEVICE_ATTR(duty_cycle, 0220, NULL, duty_cycle_store);
 static DEVICE_ATTR(duty_cycle_ns, 0660, duty_cycle_ns_show, duty_cycle_ns_store);
 static DEVICE_ATTR(period_ns, 0660, period_ns_show, period_ns_store);
-
+static DEVICE_ATTR(steps, 0660, steps_show, steps_store);
 
 static struct attribute *soft_pwm_dev_attrs[] = {
     &dev_attr_duty_cycle.attr,
     &dev_attr_duty_cycle_ns.attr,
     &dev_attr_period_ns.attr,
     &dev_attr_frequency.attr,
+    &dev_attr_steps.attr,
     NULL,
 };
 
@@ -269,6 +282,30 @@ static ssize_t period_ns_show(struct device *dev,
     return sprintf(buf, "%lu", ch->period_ns);
 }
 
+static ssize_t steps_store(struct device *dev,
+        struct device_attribute *attr,
+        const char *buf, size_t len) {
+    int steps = 0;
+    struct pwm_channel *ch = dev_get_drvdata(dev);
+
+    if (!kstrtoint(buf, 10, &steps)) {
+        deinit_channel(ch);
+        if (steps != 0) {
+            ch->steps = steps;
+            ch->t1 = ktime_set(0, ch->period_ns);
+            gpio_direction_output(ch->gpio, 1);
+            hrtimer_start(&ch->tm1, ch->t1, HRTIMER_MODE_REL);
+        }
+    }
+    return len;
+}
+
+static ssize_t steps_show(struct device *dev,
+        struct device_attribute *attr, char *buf) {
+    struct pwm_channel *ch = dev_get_drvdata(dev);
+    return sprintf(buf, "%d", ch->steps);
+}
+
 ssize_t export_store(struct class *class,
         struct class_attribute *attr,
         const char *buf,
@@ -316,6 +353,7 @@ ssize_t export_store(struct class *class,
     ch->gpio = gpio;
     ch->period_ns = DEFAULT_PERIOD;
     ch->duty_cycle_ns = DEFAULT_DUTY_CYCLE;
+    ch->steps = -1;
     INIT_LIST_HEAD(&ch->chan_list);
 
     // create sysfs entries
