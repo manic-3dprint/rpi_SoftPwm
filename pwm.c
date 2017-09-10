@@ -57,6 +57,8 @@ struct pwm_channel {
 static LIST_HEAD(_channels);
 static struct mutex _lock;
 
+/*　----------------------------------------------------------------*/
+
 /**
  * @brief callback for timer 1 - responsible for the rising slope
  *
@@ -114,6 +116,7 @@ enum hrtimer_restart cb2(struct hrtimer *t) {
     return HRTIMER_NORESTART;
 }
 
+/*　----------------------------------------------------------------*/
 void init_channel(struct pwm_channel *a_ch) {
     hrtimer_init(&a_ch->tm1, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     hrtimer_init(&a_ch->tm2, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
@@ -139,8 +142,7 @@ void deinit_channel(struct pwm_channel *a_ch) {
     }
 }
 
-
-/* ========================================================================== */
+/*　----------------------------------------------------------------*/
 static ssize_t export_store(struct class *class, struct class_attribute *attr, const char *buf, size_t len);
 static ssize_t unexport_store(struct class *class, struct class_attribute *attr, const char *buf, size_t len);
 
@@ -202,8 +204,10 @@ static ssize_t frequency_store(struct device *dev,
 
         deinit_channel(ch);
         ch->period_ns = t_ns;
+        if (ch->period_ns == 0) return len;
         if (ch->duty_cycle_ns > ch->period_ns) {
-            ch->duty_cycle_ns = ch->period_ns / 2;
+            //ch->duty_cycle_ns = ch->period_ns / 2;
+            ch->duty_cycle_ns = 0;
         }
 #if DEBUG == 1
         printk(KERN_INFO "new cycle period = %lu", ch->period_ns);
@@ -235,6 +239,7 @@ static ssize_t duty_cycle_store(struct device *dev,
     return len;
 }
 
+/*　----------------------------------------------------------------*/
 static ssize_t duty_cycle_ns_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
@@ -255,6 +260,7 @@ static ssize_t duty_cycle_ns_show(struct device *dev,
     return sprintf(buf, "%lu", ch->duty_cycle_ns);
 }
 
+/*　----------------------------------------------------------------*/
 static ssize_t period_ns_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
@@ -264,6 +270,7 @@ static ssize_t period_ns_store(struct device *dev,
     if (!kstrtol(buf, 10, &period)) {
         deinit_channel(ch);
         ch->period_ns = period;
+        if (ch->period_ns == 0) return len;
         if (ch->duty_cycle_ns > ch->period_ns) {
             ch->duty_cycle_ns = 0;
         }
@@ -282,6 +289,7 @@ static ssize_t period_ns_show(struct device *dev,
     return sprintf(buf, "%lu", ch->period_ns);
 }
 
+/*　----------------------------------------------------------------*/
 static ssize_t steps_store(struct device *dev,
         struct device_attribute *attr,
         const char *buf, size_t len) {
@@ -289,8 +297,8 @@ static ssize_t steps_store(struct device *dev,
     struct pwm_channel *ch = dev_get_drvdata(dev);
 
     if (!kstrtoint(buf, 10, &steps)) {
-        deinit_channel(ch);
         if (steps != 0) {
+            deinit_channel(ch);
             ch->steps = steps;
             ch->t1 = ktime_set(0, ch->period_ns);
             gpio_direction_output(ch->gpio, 1);
@@ -305,6 +313,8 @@ static ssize_t steps_show(struct device *dev,
     struct pwm_channel *ch = dev_get_drvdata(dev);
     return sprintf(buf, "%d", ch->steps);
 }
+
+/*　----------------------------------------------------------------*/
 
 ssize_t export_store(struct class *class,
         struct class_attribute *attr,
