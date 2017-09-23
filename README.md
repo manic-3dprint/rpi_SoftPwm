@@ -6,6 +6,7 @@ This module provides soft PWM capability to raspberry pi.
 # Compilation in Raspbian
 1. Update kernel and install kernel header files
 ```
+	$ apt-get update
 	$ apt-get install --only-upgrade raspberrypi-kernel
 	$ apt-get install raspberrypi-kernel-headers
 ```	
