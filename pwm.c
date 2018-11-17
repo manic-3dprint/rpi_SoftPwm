@@ -134,18 +134,30 @@ void deinit_channel(struct pwm_channel *a_ch) {
 static ssize_t export_store(struct class *class, struct class_attribute *attr, const char *buf, size_t len);
 static ssize_t unexport_store(struct class *class, struct class_attribute *attr, const char *buf, size_t len);
 
-
+/*
 static struct class_attribute soft_pwm_class_attrs[] = {
     __ATTR(export, 0660, NULL, export_store),
     __ATTR(unexport, 0660, NULL, unexport_store),
     __ATTR_NULL,
 };
+*/
 
+static CLASS_ATTR_WO(export);
+static CLASS_ATTR_WO(unexport);
+
+static struct attribute *soft_pwm_control_class_attrs[] = {
+    &class_attr_export.attr,
+    &class_attr_unexport.attr,
+    NULL,
+};
+
+ATTRIBUTE_GROUPS(soft_pwm_control_class);
 
 static struct class soft_pwm_class = {
     .name = "soft_pwm",
     .owner = THIS_MODULE,
-    .class_attrs = soft_pwm_class_attrs,
+    //    .class_attrs = soft_pwm_class_attrs,
+    .class_groups = soft_pwm_control_class_groups,
 };
 
 static ssize_t duty_cycle_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t len);
@@ -269,7 +281,7 @@ static ssize_t period_ns_show(struct device *dev,
     return sprintf(buf, "%lu", ch->period_ns);
 }
 
-ssize_t export_store(struct class *class,
+static ssize_t export_store(struct class *class,
         struct class_attribute *attr,
         const char *buf,
         size_t len) {
@@ -349,7 +361,7 @@ static int _match_channel(struct device *dev, const void *data) {
     return dev_get_drvdata(dev) == data;
 }
 
-ssize_t unexport_store(struct class *class,
+static ssize_t unexport_store(struct class *class,
         struct class_attribute *attr,
         const char *buf,
         size_t len) {
